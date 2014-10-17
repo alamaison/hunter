@@ -116,6 +116,10 @@ if(NOT HUNTER_BASE)
   endif()
 endif()
 
+if(NOT HUNTER_PROJECT_ROOT)
+  set(HUNTER_PROJECT_ROOT "${HUNTER_SELF}")
+endif()
+
 get_filename_component(HUNTER_BASE "${HUNTER_BASE}" ABSOLUTE)
 
 if(HUNTER_PACKAGE_DOWNLOAD_DIR)
@@ -127,6 +131,7 @@ endif()
 hunter_status_print("HUNTER_ROOT: ${HUNTER_ROOT}")
 hunter_status_print("HUNTER_SELF: ${HUNTER_SELF}")
 hunter_status_debug("HUNTER_BASE: ${HUNTER_BASE}")
+hunter_status_debug("HUNTER_PROJECT_ROOT: ${HUNTER_PROJECT_ROOT}")
 
 if(HUNTER_PACKAGE_DOWNLOAD_DIR)
   hunter_status_debug(
@@ -191,7 +196,7 @@ if(HUNTER_ENABLED)
 
   ### 1. Clear all '<NAME>_ROOT' variables (cache, environment, ...)
   ### 2. Set '<NAME>_ROOT' or 'HUNTER_<name>_VERSION' variables
-  include("${HUNTER_SELF}/cmake/config.cmake")
+  include("${HUNTER_PROJECT_ROOT}/cmake/config.cmake")
 else()
   hunter_status_print("DISABLED")
 endif()
