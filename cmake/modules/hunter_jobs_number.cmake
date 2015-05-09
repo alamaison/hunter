@@ -35,11 +35,12 @@ function(hunter_jobs_number jobs_options_varname toolchain_path)
   endif()
 
   if(MSVC)
+    # Use _INIT variables because CMake overwrites CMAKE_CXX_FLAGS/CMAKE_C_FLAGS
     file(
         APPEND
         "${toolchain_path}"
-        "set(CMAKE_CXX_FLAGS \"\${CMAKE_CXX_FLAGS} /MP\" CACHE STRING \"\" FORCE)\n"
-        "set(CMAKE_C_FLAGS \"\${CMAKE_C_FLAGS} /MP\" CACHE STRING \"\" FORCE)\n"
+        "set(CMAKE_CXX_FLAGS_INIT \"\${CMAKE_CXX_FLAGS_INIT} /MP\")\n"
+        "set(CMAKE_C_FLAGS_INIT \"\${CMAKE_C_FLAGS_INIT} /MP\")\n"
     )
   endif()
 
