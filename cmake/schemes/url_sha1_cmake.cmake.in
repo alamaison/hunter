@@ -19,6 +19,7 @@ list(APPEND CMAKE_MODULE_PATH "@HUNTER_SELF@/cmake/modules")
 
 include(hunter_status_debug)
 include(hunter_test_string_not_empty)
+include(hunter_user_error)
 
 hunter_status_debug("Scheme: url_sha1_cmake")
 
@@ -33,14 +34,29 @@ hunter_test_string_not_empty("@HUNTER_PACKAGE_INSTALL_PREFIX@")
 hunter_test_string_not_empty("@HUNTER_PACKAGE_CONFIGURATION_TYPES@")
 hunter_test_string_not_empty("@HUNTER_CACHE_FILE@")
 hunter_test_string_not_empty("@HUNTER_ARGS_FILE@")
+hunter_test_string_not_empty("@HUNTER_PACKAGE_LICENSE_FILE@")
 hunter_test_string_not_empty("@CMAKE_GENERATOR@")
 hunter_test_string_not_empty("${CMAKE_TOOLCHAIN_FILE}")
+
+if(IOS)
+  # Need to check that we are using patched version. Non-patched version will
+  # not install libraries but build package without errors. It means that
+  # "broken" iOS libraries will be saved to cache.
+  if(NOT EXISTS "${CMAKE_ROOT}/Modules/install_universal_ios_library.cmake")
+    hunter_fatal_error(
+        "Using non-patched CMake version for iOS build"
+        WIKI error.cmake.version.for.ios
+    )
+  endif()
+endif()
 
 string(COMPARE NOTEQUAL "@HUNTER_JOBS_OPTION@" "" have_jobs)
 if(have_jobs)
   string(COMPARE NOTEQUAL "@XCODE_VERSION@" "" is_xcode)
   if(is_xcode)
     set(jobs_option "-jobs" "@HUNTER_JOBS_OPTION@")
+  elseif("@MSVC_IDE@")
+    set(jobs_option "/maxcpucount:@HUNTER_JOBS_OPTION@")
   else()
     set(jobs_option "-j@HUNTER_JOBS_OPTION@")
   endif()
@@ -49,6 +65,18 @@ else()
 endif()
 
 set(previous_project "")
+
+if("@HUNTER_PACKAGE_LOG_BUILD@")
+  set(log_build 1)
+else()
+  set(log_build 0)
+endif()
+
+if("@HUNTER_PACKAGE_LOG_INSTALL@")
+  set(log_install 1)
+else()
+  set(log_install 0)
+endif()
 
 foreach(configuration @HUNTER_PACKAGE_CONFIGURATION_TYPES@)
   # All configurations use the same URL which will be downloaded only once
@@ -97,6 +125,14 @@ foreach(configuration @HUNTER_PACKAGE_CONFIGURATION_TYPES@)
           --config ${configuration}
           --
           ${jobs_option}
+        COMMAND # Copy license files
+          "@CMAKE_COMMAND@"
+          "-Dsrcdir=@HUNTER_PACKAGE_SOURCE_DIR@"
+          "-Ddstfile=@HUNTER_PACKAGE_LICENSE_FILE@"
+          -P
+          "@HUNTER_SELF@/scripts/try-copy-license.cmake"
+      LOG_BUILD ${log_build}
+      LOG_INSTALL ${log_install}
   )
 
   # Each external project must depends on previous one since they all use

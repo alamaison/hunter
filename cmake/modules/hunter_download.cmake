@@ -1,4 +1,4 @@
-# Copyright (c) 2013-2015, Ruslan Baratov
+# Copyright (c) 2013-2015, Ruslan Baratov, Aaditya Kalsi
 # All rights reserved.
 
 include(CMakeParseArguments) # cmake_parse_arguments
@@ -17,13 +17,14 @@ include(hunter_test_string_not_empty)
 include(hunter_user_error)
 
 function(hunter_download)
-  set(one PACKAGE_NAME PACKAGE_COMPONENT)
+  set(one PACKAGE_NAME PACKAGE_COMPONENT PACKAGE_INTERNAL_DEPS_ID)
   set(multiple PACKAGE_DEPENDS_ON)
 
   cmake_parse_arguments(HUNTER "" "${one}" "${multiple}" ${ARGV})
   # -> HUNTER_PACKAGE_NAME
   # -> HUNTER_PACKAGE_COMPONENT
   # -> HUNTER_PACKAGE_DEPENDS_ON
+  # -> HUNTER_PACKAGE_INTERNAL_DEPS_ID
 
   if(HUNTER_UNPARSED_ARGUMENTS)
     hunter_internal_error("Unparsed: ${HUNTER_UNPARSED_ARGUMENTS}")
@@ -45,6 +46,13 @@ function(hunter_download)
   string(COMPARE NOTEQUAL "${HUNTER_BINARY_DIR}" "" hunter_has_binary_dir)
   string(COMPARE NOTEQUAL "${HUNTER_PACKAGE_COMPONENT}" "" hunter_has_component)
   string(COMPARE NOTEQUAL "${CMAKE_TOOLCHAIN_FILE}" "" hunter_has_toolchain)
+  string(
+      COMPARE
+      NOTEQUAL
+      "${HUNTER_PACKAGE_INTERNAL_DEPS_ID}"
+      ""
+      has_internal_deps_id
+  )
 
   if(hunter_has_component)
     set(HUNTER_EP_NAME "${HUNTER_PACKAGE_NAME}-${HUNTER_PACKAGE_COMPONENT}")
@@ -90,8 +98,21 @@ function(hunter_download)
       HUNTER_PACKAGE_DOWNLOAD_DIR
   )
 
-  if(NOT DEFINED HUNTER_DOWNLOAD_SCHEME_INSTALL)
-    hunter_internal_error("HUNTER_DOWNLOAD_SCHEME_INSTALL not defined")
+
+  # Check that only one scheme is set to 1
+  set(all_schemes "")
+  set(all_schemes "${all_schemes}${HUNTER_PACKAGE_SCHEME_DOWNLOAD}")
+  set(all_schemes "${all_schemes}${HUNTER_PACKAGE_SCHEME_UNPACK}")
+  set(all_schemes "${all_schemes}${HUNTER_PACKAGE_SCHEME_INSTALL}")
+
+  string(COMPARE EQUAL "${all_schemes}" "1" is_good)
+  if(NOT is_good)
+    hunter_internal_error(
+        "Incorrect schemes:"
+        "  HUNTER_PACKAGE_SCHEME_DOWNLOAD = ${HUNTER_PACKAGE_SCHEME_DOWNLOAD}"
+        "  HUNTER_PACKAGE_SCHEME_UNPACK = ${HUNTER_PACKAGE_SCHEME_UNPACK}"
+        "  HUNTER_PACKAGE_SCHEME_INSTALL = ${HUNTER_PACKAGE_SCHEME_INSTALL}"
+    )
   endif()
 
   # Set:
@@ -128,31 +149,50 @@ function(hunter_download)
   set(HUNTER_PACKAGE_SOURCE_DIR "${HUNTER_PACKAGE_HOME_DIR}/Source")
 
   if(HUNTER_PACKAGE_CACHEABLE)
-    if(NOT HUNTER_DOWNLOAD_SCHEME_INSTALL)
-      hunter_internal_error("Unpack-only packages is cacheable by default")
+    if(NOT HUNTER_PACKAGE_SCHEME_INSTALL)
+      hunter_internal_error("Non-install packages is cacheable by default")
     endif()
     set(HUNTER_PACKAGE_INSTALL_PREFIX "${HUNTER_PACKAGE_HOME_DIR}/Install")
   else()
     set(HUNTER_PACKAGE_INSTALL_PREFIX "${HUNTER_INSTALL_PREFIX}")
   endif()
 
-  if(HUNTER_DOWNLOAD_SCHEME_INSTALL)
+  if(HUNTER_PACKAGE_SCHEME_INSTALL)
     set(${root_name} "${HUNTER_INSTALL_PREFIX}")
     hunter_status_debug("Install to: ${HUNTER_INSTALL_PREFIX}")
   else()
     if(hunter_has_component)
       hunter_internal_error(
-          "Component for unpack-only package:"
+          "Component for non-install package:"
           " ${HUNTER_PACKAGE_NAME} ${HUNTER_PACKAGE_COMPONENT}"
       )
     endif()
-    set(${root_name} "${HUNTER_PACKAGE_SOURCE_DIR}")
-    hunter_status_debug("Unpack to: ${HUNTER_PACKAGE_SOURCE_DIR}")
+    if(HUNTER_PACKAGE_SCHEME_DOWNLOAD)
+      set(${root_name} "${HUNTER_PACKAGE_SOURCE_DIR}")
+      hunter_status_debug("Download to: ${HUNTER_PACKAGE_SOURCE_DIR}")
+    elseif(HUNTER_PACKAGE_SCHEME_UNPACK)
+      set(${root_name} "${HUNTER_PACKAGE_SOURCE_DIR}")
+      hunter_status_debug("Unpack to: ${HUNTER_PACKAGE_SOURCE_DIR}")
+    else()
+      hunter_internal_error("Invalid scheme")
+    endif()
   endif()
+
+  # license file variable
+  set(HUNTER_PACKAGE_LICENSE_FILE "${HUNTER_PACKAGE_INSTALL_PREFIX}/licenses/${HUNTER_PACKAGE_NAME}/LICENSE")
+  set(license_var "${HUNTER_PACKAGE_NAME}_LICENSE")
+  set(license_val "${HUNTER_INSTALL_PREFIX}/licenses/${HUNTER_PACKAGE_NAME}/LICENSE")
 
   set(${root_name} "${${root_name}}" PARENT_SCOPE)
   set(ENV{${root_name}} "${${root_name}}")
   hunter_status_print("${root_name}: ${${root_name}} (ver.: ${ver})")
+
+  # Same for the "snake case"
+  string(REPLACE "-" "_" snake_case_root_name "${root_name}")
+  set(${snake_case_root_name} "${${root_name}}" PARENT_SCOPE)
+  set(ENV{${snake_case_root_name}} "${${root_name}}")
+
+  set(${license_var} ${license_val} PARENT_SCOPE)
 
   # temp toolchain file to set variables and include real toolchain
   set(HUNTER_DOWNLOAD_TOOLCHAIN "${HUNTER_PACKAGE_HOME_DIR}/toolchain.cmake")
@@ -168,8 +208,8 @@ function(hunter_download)
   )
 
   foreach(deps ${HUNTER_PACKAGE_DEPENDS_ON})
-    if(NOT HUNTER_DOWNLOAD_SCHEME_INSTALL)
-      hunter_internal_error("Unpack-only scheme can't depends on anything")
+    if(NOT HUNTER_PACKAGE_SCHEME_INSTALL)
+      hunter_internal_error("Non-install scheme can't depends on anything")
     endif()
     # Register explicit dependency
     hunter_register_dependency(
@@ -273,9 +313,15 @@ function(hunter_download)
   hunter_status_debug("Download scheme: ${HUNTER_DOWNLOAD_SCHEME}")
   hunter_status_debug("Url: ${HUNTER_PACKAGE_URL}")
   hunter_status_debug("SHA1: ${HUNTER_PACKAGE_SHA1}")
-  if(HUNTER_DOWNLOAD_SCHEME_INSTALL)
+  if(HUNTER_PACKAGE_SCHEME_INSTALL)
     hunter_status_debug(
         "Configuration types: ${HUNTER_PACKAGE_CONFIGURATION_TYPES}"
+    )
+  endif()
+
+  if(has_internal_deps_id)
+    hunter_status_debug(
+        "Internal dependencies ID: ${HUNTER_PACKAGE_INTERNAL_DEPS_ID}"
     )
   endif()
 
@@ -367,12 +413,18 @@ function(hunter_download)
     )
   endif()
 
-  hunter_find_stamps("${HUNTER_PACKAGE_BUILD_DIR}")
+  if(HUNTER_PACKAGE_SCHEME_DOWNLOAD)
+    # This scheme not using ExternalProject_Add so there will be no stamps
+  else()
+    hunter_find_stamps("${HUNTER_PACKAGE_BUILD_DIR}")
+  endif()
 
   hunter_save_to_cache()
 
+  hunter_status_debug("Cleaning up build directories...")
+
   file(REMOVE_RECURSE "${HUNTER_PACKAGE_BUILD_DIR}")
-  if(HUNTER_DOWNLOAD_SCHEME_INSTALL)
+  if(HUNTER_PACKAGE_SCHEME_INSTALL)
     # Unpacked directory not needed (save some disk space)
     file(REMOVE_RECURSE "${HUNTER_PACKAGE_SOURCE_DIR}")
   endif()

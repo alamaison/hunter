@@ -8,12 +8,47 @@ else()
 endif()
 
 include(hunter_add_version)
+include(hunter_cacheable)
 include(hunter_cmake_args)
 include(hunter_download)
 include(hunter_pick_scheme)
 
 # Disable searching in locations not specified by these hint variables.
 set(Boost_NO_SYSTEM_PATHS ON)
+
+# Version without tests and docs
+hunter_add_version(
+    PACKAGE_NAME
+    Boost
+    VERSION
+    "1.58.0-p1"
+    URL
+    "https://github.com/hunter-packages/boost/archive/v1.58.0-p1.tar.gz"
+    SHA1
+    bc417f98b644f244121c0eb47e810b4c6a6277e8
+)
+
+hunter_add_version(
+    PACKAGE_NAME
+    Boost
+    VERSION
+    "1.58.0-p0"
+    URL
+    "https://github.com/hunter-packages/boost/archive/v1.58.0-p0.tar.gz"
+    SHA1
+    0c3a2f284e85a61e2d2ccc1a6fdc8dc7a443ef67
+)
+
+hunter_add_version(
+    PACKAGE_NAME
+    Boost
+    VERSION
+    "1.58.0"
+    URL
+    "http://sourceforge.net/projects/boost/files/boost/1.58.0/boost_1_58_0.tar.bz2/download"
+    SHA1
+    2fc96c1651ac6fe9859b678b165bd78dc211e881
+)
 
 hunter_add_version(
     PACKAGE_NAME
@@ -152,4 +187,5 @@ hunter_add_version(
 )
 
 hunter_pick_scheme(DEFAULT url_sha1_boost)
-hunter_download(PACKAGE_NAME Boost)
+hunter_cacheable(Boost)
+hunter_download(PACKAGE_NAME Boost PACKAGE_INTERNAL_DEPS_ID "1")

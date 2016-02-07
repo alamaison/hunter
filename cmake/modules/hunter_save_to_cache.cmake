@@ -13,7 +13,7 @@ include(hunter_unpack_directory)
 
 # Save results of install
 # Note:
-#  1. Unpack-only schemes is always cacheable (HUNTER_DOWNLOAD_SCHEME_INSTALL)
+#  1. Non-install schemes is always cacheable (HUNTER_PACKAGE_SCHEME_INSTALL)
 #  2. Skip everything if package is not cacheable (HUNTER_PACKAGE_CACHEABLE)
 #  3. Pack everything from HUNTER_PACKAGE_INSTALL_PREFIX to Cache
 #  4. Unpack archive from Cache to HUNTER_INSTALL_PREFIX
@@ -26,34 +26,47 @@ function(hunter_save_to_cache)
   hunter_test_string_not_empty("${HUNTER_PACKAGE_NAME}")
 
   string(COMPARE NOTEQUAL "${HUNTER_PACKAGE_COMPONENT}" "" has_component)
+  string(
+      COMPARE
+      NOTEQUAL
+      "${HUNTER_PACKAGE_INTERNAL_DEPS_ID}"
+      ""
+      has_internal_deps_id
+  )
 
   set(human_readable "${HUNTER_PACKAGE_NAME}")
   if(has_component)
     set(
         human_readable
-        "${human_readable} (component: ${HUNTER_PACKAGE_COMPONENT}"
+        "${human_readable} (component: ${HUNTER_PACKAGE_COMPONENT})"
     )
   endif()
   hunter_status_debug("Saving to cache: ${human_readable}")
 
-  if(NOT DEFINED HUNTER_DOWNLOAD_SCHEME_INSTALL)
-    hunter_internal_error("HUNTER_DOWNLOAD_SCHEME_INSTALL not defined")
-  endif()
-
   set(cache_file "${HUNTER_PACKAGE_HOME_DIR}/cache.sha1")
 
-  ### Unpack-only must be saved already (see hunter_load_from_cache)
-  if(NOT HUNTER_DOWNLOAD_SCHEME_INSTALL)
+  ### Non-install packages must be saved already (see hunter_load_from_cache)
+  if(NOT HUNTER_PACKAGE_SCHEME_INSTALL)
     if(NOT EXISTS "${cache_file}")
       hunter_internal_error("Cache file not found")
     endif()
-    hunter_status_debug("Unpack only (already cached)")
+    if(has_internal_deps_id)
+      hunter_internal_error(
+          "HUNTER_PACKAGE_INTERNAL_DEPS_ID for non-install package"
+      )
+    endif()
+    hunter_status_debug("Non-install (already cached)")
     return()
   endif()
 
   ### Skip non-cacheable
   if(NOT HUNTER_PACKAGE_CACHEABLE)
     hunter_status_debug("Not cacheable")
+    if(has_internal_deps_id)
+      hunter_internal_error(
+          "HUNTER_PACKAGE_INTERNAL_DEPS_ID for non-cacheable package"
+      )
+    endif()
     return()
   endif()
 

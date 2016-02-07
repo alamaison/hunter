@@ -123,9 +123,19 @@ def run():
 
   if parsed_args.clear_except_download:
     base_dir = os.path.join(hunter_root, '_Base')
-    for filename in os.listdir(base_dir):
-      if filename != 'Download':
-        shutil.rmtree(os.path.join(base_dir, filename))
+    if os.path.exists(base_dir):
+      print('Clearing directory: {}'.format(base_dir))
+      hunter_download_dir = os.path.join(base_dir, 'Download', 'Hunter')
+      if os.path.exists(hunter_download_dir):
+        shutil.rmtree(hunter_download_dir)
+      for filename in os.listdir(base_dir):
+        if filename != 'Download':
+          to_remove = os.path.join(base_dir, filename)
+          if os.name == 'nt':
+            # Fix "path too long" error
+            subprocess.check_call(['cmd', '/c', 'rmdir', to_remove, '/S', '/Q'])
+          else:
+            shutil.rmtree(to_remove)
 
   build_script = 'build.py'
   if os.name == 'nt':
@@ -144,6 +154,8 @@ def run():
       sys.executable,
       build_script,
       '--clear',
+      '--config',
+      'Release',
       '--toolchain',
       toolchain,
       '--home',

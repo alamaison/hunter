@@ -14,7 +14,7 @@ include(hunter_unpack_directory)
 # Set DONE stamp on success
 # Notes:
 #   1. Skip everything if package is not cacheable (HUNTER_PACKAGE_CACHEABLE)
-#   2. Save SHA1 of package if package is unpack-only (HUNTER_DOWNLOAD_SCHEME_INSTALL)
+#   2. Save SHA1 of non-install packages (HUNTER_PACKAGE_SCHEME_INSTALL)
 #   3. Toolchain-ID directory already locked
 function(hunter_load_from_cache)
   hunter_test_string_not_empty("${HUNTER_CACHED_ROOT}")
@@ -30,24 +30,38 @@ function(hunter_load_from_cache)
     set(human_readable "${human_readable} (comp.: ${HUNTER_PACKAGE_COMPONENT})")
   endif()
 
+  string(
+      COMPARE
+      NOTEQUAL
+      "${HUNTER_PACKAGE_INTERNAL_DEPS_ID}"
+      ""
+      has_internal_deps_id
+  )
+
   set(cache_file "${HUNTER_PACKAGE_HOME_DIR}/cache.sha1")
 
-  if(NOT DEFINED HUNTER_DOWNLOAD_SCHEME_INSTALL)
-    hunter_internal_error("HUNTER_DOWNLOAD_SCHEME_INSTALL not defined")
-  endif()
-
-  if(NOT HUNTER_DOWNLOAD_SCHEME_INSTALL)
+  if(NOT HUNTER_PACKAGE_SCHEME_INSTALL)
     # We only need to save cache.sha1 file:
     #   * no dependencies possible
     #   * cache SHA1 = archive SHA1
     file(WRITE "${cache_file}" "${HUNTER_PACKAGE_SHA1}")
     hunter_status_debug(
-        "Unpack-only saved: ${cache_file} (${HUNTER_PACKAGE_SHA1})"
+        "Non-install saved: ${cache_file} (${HUNTER_PACKAGE_SHA1})"
     )
+    if(has_internal_deps_id)
+      hunter_internal_error(
+          "HUNTER_PACKAGE_INTERNAL_DEPS_ID for non-install package"
+      )
+    endif()
     return()
   endif()
 
   if(NOT HUNTER_PACKAGE_CACHEABLE)
+    if(has_internal_deps_id)
+      hunter_internal_error(
+          "HUNTER_PACKAGE_INTERNAL_DEPS_ID for non-cacheable package"
+      )
+    endif()
     return()
   endif()
 
@@ -105,7 +119,8 @@ function(hunter_load_from_cache)
       endif()
       if(NOT dep_entry STREQUAL package_sha1)
         hunter_status_debug("Cache miss for package ${package}/${component}:")
-        hunter_status_debug("  ${cached_sha1} != ${package_sha1}")
+        hunter_status_debug("  Expected `${dep_entry}`")
+        hunter_status_debug("  Got `${package_sha1}`")
         set(cache_hit FALSE)
         break()
       endif()

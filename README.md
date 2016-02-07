@@ -2,11 +2,11 @@ Hunter [![Build Status][travis-master]][travis-hunter]
 ======
 
 * Cross-platform package manager for C++ (based on CMake [ExternalProject][cmake-external-project])
-* Supported platforms: **Linux**, **Mac**, **Windows**, **iOS**
+* Supported platforms: **Linux**, **Mac**, **Windows**, **iOS**, **Android**, **Raspberry Pi**
 
 ### What is it?
 
-Every Hunter [release][hunter-releases] archive is a meta-package with build instructions and URLs of real packages:
+Every Hunter [release][hunter-releases] ([Atom feed](https://github.com/ruslo/hunter/releases.atom)) archive is a meta-package with build instructions and URLs of real packages:
 ```
 Hunter (0.4.2) = {
     Boost (1.55.0, 1.56.0, 1.57.0),
@@ -48,6 +48,7 @@ superbuild files. Just change 2 lines of code: input parameters `SHA1`/`URL` of 
 ### Notes about version of CMake
 
 * [3.0.0][cmake-3.0.0-release-notes] **Minimum required**
+  * **Buggy**, see [PR #198](https://github.com/ruslo/hunter/pull/198#issuecomment-120630877)
   * Interface header-only libraries
   * Sub-option `VERSION` for command `project`
   * New MSVC generator names
@@ -59,15 +60,14 @@ superbuild files. Just change 2 lines of code: input parameters `SHA1`/`URL` of 
   * New synchronization command `file(LOCK ...)` ([change][cmake-file-lock-commit])
   * [HUNTER_SKIP_LOCK][error.can.not.lock]
 * iOS. Patched (workaround) version of CMake
-  * [Patched releases][cmake-patched-releases]
+  * [Latest patched release](https://github.com/ruslo/CMake/releases/tag/v3.4.1-p0)
   * Fix [iOS bug][ios-bug]
   * Create universal (armv7, armv7s, arm64, i386, x86_64) libraries
   * [iOS toolchain][polly-ios-toolchain]
 
 ### First step
 
-* Set `HUNTER_ROOT` environment variable (recommended but not mandatory, see 
-[other options][hunter-gate-effects])
+* Set [HUNTER_ROOT](https://github.com/ruslo/hunter/wiki/usr.variables#hunter_root) environment variable to an empty directory. This directory will be used by `HunterGate` module for storing packages and utility files. Using environment variable is recommended but not mandatory, see [other options][hunter-gate-effects].
 
 * Set minimum CMake version:
 ```cmake
@@ -79,12 +79,12 @@ cmake_minimum_required(VERSION 3.0)
 include("cmake/HunterGate.cmake")
 ```
 
-* This module will download archive automatically from `URL` that you provide:
+* This module will download archive automatically from `URL` that you provide to the `HUNTER_ROOT` directory (it means that there is **no** need to clone this repository in general, see [notes](https://github.com/hunter-packages/gate#notes)):
 
 ```cmake
 HunterGate(
-    URL "https://github.com/ruslo/hunter/archive/v0.8.9.tar.gz"
-    SHA1 "a63185bfe1235b42a4644e84ab121c7ac4a0db65"
+    URL "https://github.com/ruslo/hunter/archive/v0.10.9.tar.gz"
+    SHA1 "53b198e364dc7bc8360fc545f798563229bd7e20"
 )
 ```
 
@@ -93,18 +93,36 @@ HunterGate(
 project(Foo)
 ```
 
-* Let's download and install `boost.regex` and `boost.filesystem`:
+* Let's download and install `boost.{regex,system,filesystem}`:
 ```cmake
-hunter_add_package(Boost COMPONENTS regex filesystem)
+hunter_add_package(Boost COMPONENTS regex system filesystem)
 ```
 
-* Hunter part is done, now well known CMake-style kung-fu:
+* Hunter part is done, now well known CMake-style kung-fu (see [pkg.boost](https://github.com/ruslo/hunter/wiki/pkg.boost)):
 ```cmake
-find_package(Boost REQUIRED regex filesystem)
+find_package(Boost CONFIG REQUIRED regex system filesystem)
 
-include_directories(${Boost_INCLUDE_DIR})
 add_executable(foo foo.cpp)
-target_link_libraries(foo ${Boost_LIBRARIES})
+target_link_libraries(foo PUBLIC Boost::regex Boost::system Boost::filesystem)
+```
+
+* Summarize:
+```cmake
+cmake_minimum_required(VERSION 3.0)
+
+include("cmake/HunterGate.cmake")
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.10.9.tar.gz"
+    SHA1 "53b198e364dc7bc8360fc545f798563229bd7e20"
+)
+
+project(Foo)
+
+hunter_add_package(Boost COMPONENTS regex system filesystem)
+find_package(Boost CONFIG REQUIRED regex system filesystem)
+
+add_executable(foo foo.cpp)
+target_link_libraries(foo PUBLIC Boost::regex Boost::system Boost::filesystem)
 ```
 
 * Build it:
@@ -171,7 +189,7 @@ Message in logs:
 
 ### Toolchain-ID
 
-Third level of customization. Each build can be run with different toolchain. In general the result is completely different root `lib`/`include` directories. For example on Windows you can simultaniously build Visual Studio (32/64), NMake, Cygwin and MinGW projects, on Linux GCC/Clang, on Mac Xcode, Makefile, iOS. Or choose different clang tools like static analyzer and sanitizers. Each toolchain file will be forwarded to external project so if you create toolchain with compiler `g++` and flag `-std=c++11` all dependent projects will be built by `g++ -std=c++11`. Information about toolchain has some internal representation (`toolchain.info`) and user can see first 7 digits (ID) of `SHA1` hash of this file.
+Third level of customization. Each build can be run with different toolchain. In general the result is completely different root `lib`/`include` directories. For example on Windows you can simultaniously build Visual Studio (32/64), NMake, Cygwin and MinGW projects, on Linux GCC/Clang, on Mac Xcode, Makefile, iOS. Or choose different clang tools like static analyzer/sanitizers and other platforms like Android/Raspberry Pi. Each toolchain file will be forwarded to external project so if you create toolchain with compiler `g++` and flag `-std=c++11` all dependent projects will be built by `g++ -std=c++11`. Information about toolchain has some internal representation (`toolchain.info`) and user can see first 7 digits (ID) of `SHA1` hash of this file.
 
 * `d46ea0b`
  * `gcc`
@@ -191,6 +209,7 @@ Message in logs:
 ```
 
 * [Collection of toolchains][polly]
+* [Android example](https://github.com/forexample/android-cmake)
 
 ### Uninstall
 
@@ -210,7 +229,11 @@ Feel free to open new [issue][hunter-new-issue] if you want to ask any questions
 
 ### Contribution
 
-Read [wiki][hunter-wiki] before making changes. Please send a patch as a pull request against the branch [develop][hunter-dev-branch]. After successfull build this branch will be merged to [master][hunter-master-branch] automatically.
+* [Contribution](https://github.com/ruslo/hunter/wiki/dev.contribution)
+
+### Donations
+
+* [Donations](https://github.com/ruslo/hunter/blob/develop/donate.md)
 
 ### Links
 * [Gate to hunter packages][hunter-gate]
@@ -229,7 +252,6 @@ Read [wiki][hunter-wiki] before making changes. Please send a patch as a pull re
 [cmake-retry-commit]: https://github.com/Kitware/CMake/commit/30a94eecdb5c580d83a224848b78d186643e8105
 [cmake-file-lock-commit]: https://github.com/Kitware/CMake/commit/e6db4c5a4ede8039ed525e3facebd7e0eb7ec1b7
 
-[cmake-patched-releases]: https://github.com/ruslo/CMake/releases
 [cmake-3.0.0-release-notes]: http://www.cmake.org/cmake/help/v3.0/release/3.0.0.html#commands
 [cmake-3.1.0-release-notes]: http://www.cmake.org/cmake/help/v3.1/release/3.1.0.html#syntax
 [cmake-3.2-release-notes]: http://www.cmake.org/cmake/help/v3.2/release/3.2.html#commands

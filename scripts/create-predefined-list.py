@@ -40,6 +40,13 @@ argparser.add_argument(
 )
 
 argparser.add_argument(
+    '--arch',
+    help="""
+        Architecture for compiler (e.g. armv7, armv7s, arm64, i386, x86_64, ...)
+    """
+)
+
+argparser.add_argument(
     '--boost-predef',
     action='store_true',
     help="""
@@ -100,10 +107,10 @@ if args.boost_predef:
   ]
 
 if args.compiler:
-  macroses = subprocess.check_output(
-      [args.compiler, '-E', '-x', 'c++', '-dM', '/dev/null'],
-      universal_newlines=True
-  )
+  run_args = [args.compiler, '-E', '-x', 'c++', '-dM', '/dev/null']
+  if args.arch:
+    run_args += ['-arch', args.arch]
+  macroses = subprocess.check_output(run_args, universal_newlines=True)
   compiler_macro_list = macroses.split('\n')
   for x in compiler_macro_list:
     if re.match(r'^#define _', x):
@@ -134,6 +141,10 @@ cpp_head = """
     "__HUNTER_MACRO_CHECK_END__"
 
 #include <exception> // Check std library version
+
+#if defined(__ANDROID__)
+# include <android/api-level.h> // Header with __ANDROID_API__
+#endif
 """
 
 cpp_one_check = """
@@ -141,6 +152,22 @@ cpp_one_check = """
 # pragma message(HUNTER_INFO({}))
 #endif
 """
+
+# http://clang.llvm.org/docs/AddressSanitizer.html#conditional-compilation-with-has-feature-address-sanitizer
+sanitize_detect_check = """
+#if defined(__has_feature)
+# if __has_feature({}_sanitizer)
+#  pragma message(HUNTER_INFO(__HUNTER_DETECT_FEATURE_{}_sanitizer))
+# endif
+#endif
+"""
+
+sanitizers_list = [
+    'address',
+#    'leak', # Not detected!
+    'memory',
+    'thread'
+]
 
 cpp_end = """
 int main() {
@@ -152,4 +179,6 @@ if macros_list:
   cpp_result.write(cpp_head)
   for x in macros_list:
     cpp_result.write(cpp_one_check.format(x, x))
+  for x in sanitizers_list:
+    cpp_result.write(sanitize_detect_check.format(x, x))
   cpp_result.write(cpp_end)

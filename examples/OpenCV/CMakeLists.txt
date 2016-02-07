@@ -10,8 +10,11 @@ include("../common.cmake")
 project(download-opencv)
 
 hunter_add_package(OpenCV)
-find_package(ZLIB CONFIG REQUIRED) # Before OpenCV
 find_package(OpenCV REQUIRED)
+
+message("OpenCV_DIR: ${OpenCV_DIR}")
+message("OpenCV_CONFIG: ${OpenCV_CONFIG}")
+message("OpenCV_LIBS: ${OpenCV_LIBS}")
 
 add_executable(foo foo.cpp)
 target_link_libraries(foo PRIVATE ${OpenCV_LIBS})

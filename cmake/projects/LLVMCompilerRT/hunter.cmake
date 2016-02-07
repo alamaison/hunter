@@ -15,6 +15,17 @@ hunter_add_version(
     PACKAGE_NAME
     LLVMCompilerRT
     VERSION
+    "3.6.2"
+    URL
+    "http://llvm.org/releases/3.6.2/compiler-rt-3.6.2.src.tar.xz"
+    SHA1
+    c6c52d2923a60f1a2ca2f22fea1770fd2e25728d
+)
+
+hunter_add_version(
+    PACKAGE_NAME
+    LLVMCompilerRT
+    VERSION
     "3.6.0"
     URL
     "http://llvm.org/releases/3.6.0/compiler-rt-3.6.0.src.tar.xz"
@@ -44,6 +55,6 @@ hunter_add_version(
     d644b1e4f306f7ad35df0a134d14a1123cd9f082
 )
 
-hunter_pick_scheme(DEFAULT url_sha1_no_install)
+hunter_pick_scheme(DEFAULT url_sha1_unpack)
 
 hunter_download(PACKAGE_NAME LLVMCompilerRT)

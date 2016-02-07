@@ -12,11 +12,12 @@ list(APPEND CMAKE_MODULE_PATH "@HUNTER_SELF@/cmake/modules")
 
 include(CheckSymbolExists) # check_symbol_exists
 
+include(hunter_boost_component_b2_args)
 include(hunter_fatal_error)
+include(hunter_install_boost_config)
 include(hunter_internal_error)
 include(hunter_status_debug)
 include(hunter_test_string_not_empty)
-include(hunter_boost_component_b2_args)
 
 hunter_status_debug("Scheme: url_sha1_boost_library")
 
@@ -89,26 +90,50 @@ endif()
 
 string(COMPARE EQUAL "@CMAKE_CXX_COMPILER_ID@" "Clang" compiler_is_clang)
 
-if("@APPLE@")
-  set(toolset_name darwin)
+if("@ANDROID@")
+  set(toolset_name "gcc")
+  set(toolset_version "ndk")
+elseif("@APPLE@")
+  set(toolset_name "darwin")
+  set(toolset_version "")
 elseif("@CMAKE_COMPILER_IS_GNUCXX@")
-  set(toolset_name gcc)
+  set(toolset_name "gcc")
+  set(toolset_version "")
 elseif(compiler_is_clang)
-  set(toolset_name clang)
+  set(toolset_name "clang")
+  set(toolset_version "")
 elseif("@MSVC@")
-  set(toolset_name msvc)
+  set(toolset_name "msvc")
+  set(toolset_version "")
 else()
   hunter_fatal_error("TODO: set toolset for boost" WIKI "error.boost.toolset")
+endif()
+
+if("@ANDROID@")
+  get_directory_property(defs COMPILE_DEFINITIONS)
+  foreach(def ${defs})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D${def}")
+  endforeach()
+
+  get_directory_property(include_dirs INCLUDE_DIRECTORIES)
+  foreach(include_dir ${include_dirs})
+    set(
+        CMAKE_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} ${CMAKE_INCLUDE_SYSTEM_FLAG_CXX} ${include_dir}"
+    )
+  endforeach()
 endif()
 
 if("@MSVC@")
   set(env_cmd "@HUNTER_MSVC_VCVARSALL@" "@HUNTER_MSVC_ARCH@")
 else()
-  set(env_cmd "")
+  # Workaround for: http://public.kitware.com/Bug/view.php?id=15567
+  set(env_cmd "@CMAKE_COMMAND@" -E echo "configure")
 endif()
 
 if("@MSVC@")
-  set(boost_compiler cl)
+  set(boost_compiler  "@CMAKE_CXX_COMPILER@")
+  string(REPLACE "/" "\\" boost_compiler "${boost_compiler}")
 else()
   set(boost_compiler "@CMAKE_CXX_COMPILER@")
 endif()
@@ -157,16 +182,6 @@ else()
   set(copy_mpi_command "")
 endif()
 
-set(boost_user_jam "@HUNTER_PACKAGE_BUILD_DIR@/boost.user.jam")
-file(
-     WRITE
-     ${boost_user_jam}
-     "using ${toolset_name} :\n"
-     "    : \"${boost_compiler}\"\n"
-     ";\n"
-     "${using_mpi}\n"
-)
-
 if("@MSVC@")
   # Disable auto-linking
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /DBOOST_ALL_NO_LIB=1")
@@ -184,12 +199,15 @@ if(have_osx_sysroot)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isysroot @CMAKE_OSX_SYSROOT@")
 endif()
 
-if("@HUNTER_ENABLE_BOOST_SHARED@")
-  set(link_opts link=static,shared)
-else()
-  set(link_opts link=static)
+set(link_opts link=static)
+
+set(toolset_full_name ${toolset_name})
+string(COMPARE NOTEQUAL "${toolset_version}" "" has_toolset_version)
+if(has_toolset_version)
+  set(toolset_full_name ${toolset_name}-${toolset_version})
 endif()
 
+set(boost_user_jam "@HUNTER_PACKAGE_BUILD_DIR@/boost.user.jam")
 set(
     build_opts
     -a
@@ -197,22 +215,66 @@ set(
     threading=multi
     ${variants}
     --layout=tagged
-    toolset=${toolset_name}
+    toolset=${toolset_full_name}
     "--user-config=${boost_user_jam}"
     --with-@HUNTER_PACKAGE_COMPONENT@
 )
 
 hunter_boost_component_b2_args(
-  "@HUNTER_PACKAGE_COMPONENT@"
-  "@HUNTER_Boost_CMAKE_ARGS@"
-  b2_component_opts
+    "@HUNTER_PACKAGE_COMPONENT@"
+    "@HUNTER_Boost_CMAKE_ARGS@"
+    b2_component_opts
+)
+
+string(REPLACE " " ";" cxx_flags_list "${CMAKE_CXX_FLAGS}")
+
+file(
+    WRITE
+    ${boost_user_jam}
+    "using ${toolset_name}\n"
+    "  : ${toolset_version}\n"
+)
+
+if(MSVC)
+  # For Visual Studio C++ flags must not be set in compiler section.
+  # Section <compileflags> should be used.
+  #   * https://github.com/ruslo/hunter/issues/179
+  file(APPEND ${boost_user_jam} "  : \"${boost_compiler}\"\n")
+else()
+  # For Android C++ flags must be part of the compiler section:
+  #   * https://github.com/ruslo/hunter/issues/174
+  # For 'sanitize-address' toolchain flags must be part of the compiler section:
+  #   * https://github.com/ruslo/hunter/issues/269
+  file(
+      APPEND ${boost_user_jam} "  : \"${boost_compiler}\" ${CMAKE_CXX_FLAGS}\n"
   )
+endif()
+
+file(
+    APPEND
+    ${boost_user_jam}
+    "  : <archiver> \"${CMAKE_AR}\"\n"
+)
+
+if(MSVC)
+  # See 'boost_compiler' section
+  foreach(cxx_flag ${cxx_flags_list})
+    file(
+        APPEND
+        ${boost_user_jam}
+        "  <compileflags>${cxx_flag}\n"
+    )
+  endforeach()
+endif()
+
+file(
+    APPEND
+    ${boost_user_jam}
+    ";\n"
+    "${using_mpi}\n"
+)
 
 list(APPEND build_opts ${b2_component_opts})
-
-if(CMAKE_CXX_FLAGS)
-  list(APPEND build_opts "cxxflags=${CMAKE_CXX_FLAGS}")
-endif()
 
 if(CMAKE_EXE_LINKER_FLAGS)
   list(APPEND build_opts "linkflags=${CMAKE_EXE_LINKER_FLAGS}")
@@ -240,9 +302,9 @@ else()
   set(b2_cmd "./b2")
 endif()
 
-file(READ "${boost_user_jam}" USER_JAM_CONTENT)
 
 if(HUNTER_STATUS_DEBUG)
+  file(READ "${boost_user_jam}" USER_JAM_CONTENT)
   hunter_status_debug("Build options:")
   foreach(opt ${build_opts})
     hunter_status_debug("  ${opt}")
@@ -252,6 +314,14 @@ if(HUNTER_STATUS_DEBUG)
   hunter_status_debug("------")
   hunter_status_debug("${USER_JAM_CONTENT}")
   hunter_status_debug("------")
+endif()
+
+if("@MSVC@")
+  # Logging as Workaround for VS_UNICODE_OUTPUT issue:
+  # https://public.kitware.com/Bug/view.php?id=14266
+  set(log_opts LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1)
+else()
+  set(log_opts "")
 endif()
 
 ExternalProject_Add(
@@ -284,24 +354,12 @@ ExternalProject_Add(
     ${build_opts}
     stage # install only libraries, headers installed in `url_sha1_boost`
     "--stagedir=@HUNTER_PACKAGE_INSTALL_PREFIX@"
-    # Logging as Workaround for VS_UNICODE_OUTPUT issue:
-    # https://public.kitware.com/Bug/view.php?id=14266
-    LOG_CONFIGURE 1
-    LOG_BUILD 1
-    LOG_INSTALL 1
+    ${log_opts}
 )
 
-if(APPLE)
-  find_package(PythonInterp 3.2 REQUIRED)
-  ExternalProject_Add_Step(
-      "@HUNTER_EP_NAME@"
-      FixDylibId
-      COMMAND
-      "${PYTHON_EXECUTABLE}"
-      "@HUNTER_SELF@/scripts/fix-boost-dylib-id.py"
-      "--install-dir"
-      "@HUNTER_PACKAGE_INSTALL_PREFIX@/lib"
-      DEPENDEES
-      install
-  )
-endif()
+# Forward some variables
+set(HUNTER_SELF "@HUNTER_SELF@")
+set(HUNTER_PACKAGE_INSTALL_PREFIX "@HUNTER_PACKAGE_INSTALL_PREFIX@")
+set(HUNTER_Boost_VERSION "@HUNTER_Boost_VERSION@")
+
+hunter_install_boost_config()
