@@ -1,8 +1,14 @@
-Hunter [![Build Status][travis-master]][travis-hunter]
+Hunter
 ======
 
 * Cross-platform package manager for C++ (based on CMake [ExternalProject][cmake-external-project])
 * Supported platforms: **Linux**, **Mac**, **Windows**, **iOS**, **Android**, **Raspberry Pi**
+
+### CI
+
+* Travis CI OSX/Linux: [![Build Status][travis-master]][travis-hunter]
+* AppVeyor CI Windows: [![Build Status][appveyor-master]][appveyor-hunter]
+* [Per package deep testing table](https://github.com/ingenue/hunter/branches/all)
 
 ### What is it?
 
@@ -225,7 +231,9 @@ rm -rf "${HUNTER_ROOT}/_Base/Download/Hunter/0.8.3/62422b8" # remove Hunter itse
 
 ### Questions?
 
-Feel free to open new [issue][hunter-new-issue] if you want to ask any questions.
+Feel free to open new [issue][hunter-new-issue] if you want to ask any questions. Also you can write me to `ruslan_baratov@yahoo.com` or contact me using [Tox](https://tox.chat/):
+* `7EBD836B7690C3742E6F3632742BEB00283529E06D76E06F7065544A5F9C6F37D948FB0F754B`
+* `4EED21EA40B0351D8BFC85A69499A3F7CFEDA6844DA39FF1783A4D9827423F075D7194707C43`
 
 ### Contribution
 
@@ -242,8 +250,11 @@ Feel free to open new [issue][hunter-new-issue] if you want to ask any questions
 * [Toolchain examples][polly]
 * [Travis CI build example](https://github.com/forexample/hunter-simple/blob/master/.travis.yml)
 
-[travis-master]: https://travis-ci.org/ruslo/hunter.png?branch=master
-[travis-hunter]: https://travis-ci.org/ruslo/hunter
+[travis-master]: https://travis-ci.org/ruslo/hunter.svg?branch=master
+[travis-hunter]: https://travis-ci.org/ruslo/hunter/builds
+
+[appveyor-master]: https://ci.appveyor.com/api/projects/status/ubo6jse3lh5ciyvv/branch/master?svg=true
+[appveyor-hunter]: https://ci.appveyor.com/project/ruslo/hunter/history
 
 [cmake-external-project]: http://www.cmake.org/cmake/help/v3.2/module/ExternalProject.html
 [ios-bug]: http://public.kitware.com/Bug/view.php?id=12506

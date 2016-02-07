@@ -70,6 +70,10 @@ def run():
   if (project_dir == 'examples/OpenSSL') and (toolchain == 'xcode'):
     print('Skip (https://github.com/ruslo/hunter/issues/30)')
     sys.exit(0)
+
+  if (os.getenv('TRAVIS') and toolchain == 'dummy'):
+    print('Skip build: Travis CI empty matrix configuration workaround')
+    sys.exit(0)
   # -- end
 
   verbose = True
@@ -137,15 +141,22 @@ def run():
           else:
             shutil.rmtree(to_remove)
 
-  build_script = 'build.py'
   if os.name == 'nt':
     which = 'where'
   else:
     which = 'which'
 
-  build_script = subprocess.check_output(
-      [which, 'build.py'], universal_newlines=True
-  ).split('\n')[0]
+  polly_root = os.getenv('POLLY_ROOT')
+  if polly_root:
+    print('Using POLLY_ROOT: {}'.format(polly_root))
+    build_script = os.path.join(polly_root, 'bin', 'build.py')
+  else:
+    build_script = subprocess.check_output(
+        [which, 'build.py'], universal_newlines=True
+    ).split('\n')[0]
+
+  if not os.path.exists(build_script):
+    sys.exit('Script not found: {}'.format(build_script))
 
   print('Testing in: {}'.format(testing_dir))
   os.chdir(testing_dir)
@@ -166,14 +177,13 @@ def run():
       'TESTING_SHA1={}'.format(hunter_sha1)
   ]
 
-  if not parsed_args.verbose:
-    args += ['HUNTER_STATUS_DEBUG=NO']
-
   if not parsed_args.nocreate:
     args += ['HUNTER_RUN_INSTALL=ON']
 
-  if verbose:
-    args += ['--verbose']
+  args += ['--verbose']
+  if not verbose:
+    args += ['--discard', '10']
+    args += ['--tail', '200']
 
   print('Execute command: [')
   for i in args:
